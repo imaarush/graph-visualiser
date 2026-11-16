@@ -1,0 +1,26 @@
+{
+  "name": "graph-visualiser",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "npx vercel dev",
+    "preview": "npx vercel",
+    "deploy": "npx vercel --prod"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imaarush/graph-visualiser.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/imaarush/graph-visualiser/issues"
+  },
+  "homepage": "https://github.com/imaarush/graph-visualiser#readme",
+  "dependencies": {
+    "vercel": "^65.16.0"
+  }
+}
