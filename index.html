@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Graph Visualiser</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap">
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --panel: #161922;
+      --border: #2a2d3a;
+      --fg: #e2e4eb;
+      --fg-dim: #8b8fa3;
+      --accent: #4f8cff;
+      --accent-glow: rgba(79, 140, 255, 0.15);
+      --node-default: #f5c542;
+      --node-visited: #34d399;
+      --node-active: #4f8cff;
+      --node-label: #111;
+      --edge: #5a5e73;
+      --danger: #ef4444;
+      --font-display: 'Space Grotesk', system-ui, sans-serif;
+      --font-body: 'Inter', system-ui, sans-serif;
+    }
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) {
+        --bg: #f4f5f7;
+        --surface: #ffffff;
+        --panel: #f0f1f4;
+        --border: #d4d7e0;
+        --fg: #1a1d27;
+        --fg-dim: #6b7085;
+        --accent: #2563eb;
+        --accent-glow: rgba(37, 99, 235, 0.1);
+        --node-default: #eab308;
+        --node-visited: #16a34a;
+        --node-active: #2563eb;
+        --node-label: #111;
+        --edge: #9ca0b0;
+        --danger: #dc2626;
+        color-scheme: light;
+      }
+    }
+    :root[data-theme="light"] {
+      --bg: #f4f5f7;
+      --surface: #ffffff;
+      --panel: #f0f1f4;
+      --border: #d4d7e0;
+      --fg: #1a1d27;
+      --fg-dim: #6b7085;
+      --accent: #2563eb;
+      --accent-glow: rgba(37, 99, 235, 0.1);
+      --node-default: #eab308;
+      --node-visited: #16a34a;
+      --node-active: #2563eb;
+      --node-label: #111;
+      --edge: #9ca0b0;
+      --danger: #dc2626;
+      color-scheme: light;
+    }
+
+    * { box-sizing: border-box; margin: 0; }
+    html, body { height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font-body);
+      display: flex;
+      overflow: hidden;
+    }
+
+    .canvas-area {
+      flex: 1;
+      position: relative;
+      min-width: 0;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    .dist-bar {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 500;
+      pointer-events: none;
+      max-width: calc(100% - 24px);
+    }
+    .dist-bar .label {
+      color: var(--fg-dim);
+      margin-right: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+    .dist-cell {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      font-variant-numeric: tabular-nums;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .dist-cell .idx { font-size: 9px; color: var(--fg-dim); letter-spacing: 0.04em; text-transform: uppercase; }
+    .dist-cell .val { font-size: 14px; font-weight: 700; color: var(--fg); }
+    .dist-cell.active { background: var(--node-active); border-color: var(--node-active); }
+    .dist-cell.active .val, .dist-cell.active .idx { color: #fff; }
+    .dist-cell.visited { background: var(--node-visited); border-color: var(--node-visited); }
+    .dist-cell.visited .val, .dist-cell.visited .idx { color: #fff; }
+
+    .hint {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: var(--fg-dim);
+      font-size: 12px;
+      pointer-events: none;
+      white-space: nowrap;
+      opacity: 0.7;
+    }
+
+    .panel {
+      width: 260px;
+      min-width: 260px;
+      background: var(--panel);
+      border-left: 1px solid var(--border);
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+      font-size: 13px;
+    }
+    .panel h2 {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0;
+    }
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--fg-dim);
+      margin-bottom: 6px;
+    }
+    .panel input[type="number"] {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      color: var(--fg);
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-variant-numeric: tabular-nums;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .panel input[type="number"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .status-msg {
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: var(--accent-glow);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 500;
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+    }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-run { background: var(--node-visited); color: #fff; }
+    .btn-clear { background: var(--danger); color: #fff; margin-top: 4px; }
+
+    .legend {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: auto;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--fg-dim);
+    }
+    .legend-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 640px) {
+      body { flex-direction: column; }
+      .canvas-area { height: 55%; }
+      .panel {
+        width: 100%;
+        min-width: 0;
+        border-left: none;
+        border-top: 1px solid var(--border);
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 12px;
+        gap: 10px;
+        overflow-y: auto;
+        max-height: 45%;
+      }
+      .panel h2 { width: 100%; }
+      .section-label { width: 100%; margin-bottom: 0; }
+      .field-group { flex: 1; min-width: 100px; }
+      .legend { flex-direction: row; flex-wrap: wrap; width: 100%; }
+      .btn { flex: 1; min-width: 100px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="canvas-area">
+  <canvas id="c"></canvas>
+  <div class="dist-bar" id="distBar"></div>
+  <div class="hint" id="hint">Click anywhere to add a node</div>
+</div>
+<div class="panel">
+  <h2>Graph Visualiser</h2>
+
+  <div>
+    <div class="section-label">Edge</div>
+    <div class="status-msg" id="edgeStatus">Select two nodes to create an edge</div>
+  </div>
+  <div class="field-group" id="weightGroup" style="display:none">
+    <div class="section-label">Weight</div>
+    <input type="number" id="weightInput" min="1" value="1" placeholder="Edge weight">
+  </div>
+
+  <div class="field-group">
+    <div class="section-label">Source node</div>
+    <input type="number" id="srcInput" min="1" value="1" placeholder="Node #">
+  </div>
+
+  <button class="btn btn-run" id="runBtn" disabled>Run Dijkstra</button>
+  <button class="btn btn-clear" id="clearBtn">Clear graph</button>
+
+  <div class="legend">
+    <div class="section-label">Legend</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--node-default)"></div>Not visited</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--node-visited)"></div>Visited</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--node-active)"></div>Being relaxed</div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const distBar = document.getElementById('distBar');
+const hint = document.getElementById('hint');
+const edgeStatus = document.getElementById('edgeStatus');
+const weightGroup = document.getElementById('weightGroup');
+const weightInput = document.getElementById('weightInput');
+const srcInput = document.getElementById('srcInput');
+const runBtn = document.getElementById('runBtn');
+const clearBtn = document.getElementById('clearBtn');
+
+const CS = getComputedStyle(document.documentElement);
+function cv(name) { return CS.getPropertyValue(name).trim(); }
+
+let dpr = window.devicePixelRatio || 1;
+let W, H;
+
+function resize() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  W = rect.width; H = rect.height;
+  dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+window.addEventListener('resize', resize);
+
+const nodes = [];
+const edges = [];
+const adj = {};
+let selected = [];
+let running = false;
+let nodeColors = {};
+let distColors = {};
+let dist = [];
+
+function addNode(x, y) {
+  const id = nodes.length + 1;
+  nodes.push({ x, y, id });
+  adj[id] = [];
+  dist.push(Infinity);
+  nodeColors[id] = 'default';
+  distColors[id] = '';
+  updateUI();
+  draw();
+}
+
+function addEdge(from, to, w) {
+  edges.push({ from, to, weight: w });
+  if (!adj[from]) adj[from] = [];
+  adj[from].push({ node: to, weight: w });
+  draw();
+}
+
+function updateUI() {
+  runBtn.disabled = nodes.length < 2 || running;
+  hint.textContent = nodes.length === 0
+    ? 'Click anywhere to add a node'
+    : running ? 'Algorithm running…' : 'Click to add nodes, select two to connect';
+  updateDistBar();
+}
+
+function updateDistBar() {
+  distBar.innerHTML = '';
+  if (nodes.length === 0) return;
+  const lbl = document.createElement('span');
+  lbl.className = 'label';
+  lbl.textContent = 'dist[ ]';
+  distBar.appendChild(lbl);
+  nodes.forEach((n, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'dist-cell' + (distColors[n.id] ? ' ' + distColors[n.id] : '');
+    const idx = document.createElement('span');
+    idx.className = 'idx';
+    idx.textContent = n.id;
+    const val = document.createElement('span');
+    val.className = 'val';
+    val.textContent = dist[i] === Infinity ? '∞' : dist[i];
+    cell.appendChild(idx);
+    cell.appendChild(val);
+    distBar.appendChild(cell);
+  });
+}
+
+function nodeAt(x, y) {
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    const dx = x - n.x, dy = y - n.y;
+    if (dx * dx + dy * dy <= 25 * 25) return n;
+  }
+  return null;
+}
+
+canvas.addEventListener('click', e => {
+  if (running) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const clicked = nodeAt(x, y);
+  if (clicked) {
+    const idx = selected.indexOf(clicked.id);
+    if (idx >= 0) {
+      selected.splice(idx, 1);
+    } else if (selected.length < 2) {
+      selected.push(clicked.id);
+    }
+    if (selected.length === 2) {
+      edgeStatus.textContent = `Enter weight for edge ${selected[0]} → ${selected[1]} and press Enter`;
+      weightGroup.style.display = '';
+      weightInput.focus();
+    } else {
+      edgeStatus.textContent = selected.length === 1
+        ? `Node ${selected[0]} selected — pick a second`
+        : 'Select two nodes to create an edge';
+      weightGroup.style.display = 'none';
+    }
+    draw();
+  } else {
+    addNode(x, y);
+  }
+});
+
+weightInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && selected.length === 2) {
+    const w = parseInt(weightInput.value) || 1;
+    addEdge(selected[0], selected[1], w);
+    selected = [];
+    weightInput.value = '1';
+    weightGroup.style.display = 'none';
+    edgeStatus.textContent = 'Edge added! Select two nodes for another';
+    draw();
+  }
+});
+
+clearBtn.addEventListener('click', () => {
+  if (running) return;
+  nodes.length = 0; edges.length = 0;
+  Object.keys(adj).forEach(k => delete adj[k]);
+  selected = [];
+  nodeColors = {};
+  distColors = {};
+  dist = [];
+  weightGroup.style.display = 'none';
+  edgeStatus.textContent = 'Select two nodes to create an edge';
+  updateUI();
+  draw();
+});
+
+runBtn.addEventListener('click', async () => {
+  if (running || nodes.length < 2) return;
+  const src = parseInt(srcInput.value) || 1;
+  if (src < 1 || src > nodes.length) {
+    edgeStatus.textContent = `Source must be 1–${nodes.length}`;
+    return;
+  }
+  running = true;
+  runBtn.disabled = true;
+  clearBtn.disabled = true;
+  updateUI();
+  await dijkstra(src);
+  running = false;
+  runBtn.disabled = false;
+  clearBtn.disabled = false;
+  updateUI();
+  edgeStatus.textContent = 'Done! Distances shown above';
+});
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function dijkstra(src) {
+  const n = nodes.length;
+  dist = new Array(n).fill(Infinity);
+  for (const nd of nodes) { nodeColors[nd.id] = 'default'; distColors[nd.id] = ''; }
+
+  const srcIdx = src - 1;
+  dist[srcIdx] = 0;
+  nodeColors[src] = 'active';
+  distColors[src] = 'active';
+  updateDistBar(); draw();
+  await sleep(800);
+  nodeColors[src] = 'default';
+  distColors[src] = '';
+  updateDistBar(); draw();
+
+  const pq = [{ dist: 0, node: src }];
+  const visited = new Set();
+
+  while (pq.length) {
+    pq.sort((a, b) => a.dist - b.dist);
+    const { dist: d, node: u } = pq.shift();
+    if (d > dist[u - 1]) continue;
+
+    nodeColors[u] = 'visited';
+    distColors[u] = 'visited';
+    updateDistBar(); draw();
+    await sleep(800);
+
+    const neighbors = adj[u] || [];
+    for (const { node: v, weight: w } of neighbors) {
+      if (dist[v - 1] > d + w) {
+        nodeColors[v] = 'active';
+        distColors[v] = 'active';
+        dist[v - 1] = d + w;
+        updateDistBar(); draw();
+        pq.push({ dist: dist[v - 1], node: v });
+        await sleep(800);
+        if (nodeColors[v] !== 'visited') {
+          nodeColors[v] = 'default';
+          distColors[v] = '';
+        }
+        updateDistBar(); draw();
+      }
+    }
+  }
+
+  for (const nd of nodes) {
+    if (nodeColors[nd.id] !== 'visited') nodeColors[nd.id] = 'default';
+  }
+  draw();
+}
+
+function nodeColor(id) {
+  const c = nodeColors[id] || 'default';
+  if (c === 'visited') return cv('--node-visited');
+  if (c === 'active') return cv('--node-active');
+  return cv('--node-default');
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  for (const e of edges) {
+    const from = nodes.find(n => n.id === e.from);
+    const to = nodes.find(n => n.id === e.to);
+    if (!from || !to) continue;
+
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len === 0) continue;
+    const ux = dx / len, uy = dy / len;
+
+    const r = 25;
+    const sx = from.x + ux * r, sy = from.y + uy * r;
+    const ex = to.x - ux * r, ey = to.y - uy * r;
+
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.strokeStyle = cv('--edge');
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    const al = 12, aw = 5;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex - ux * al + (-uy) * aw, ey - uy * al + ux * aw);
+    ctx.lineTo(ex - ux * al - (-uy) * aw, ey - uy * al - ux * aw);
+    ctx.closePath();
+    ctx.fillStyle = cv('--edge');
+    ctx.fill();
+
+    const mx = from.x + dx * 0.35, my = from.y + dy * 0.35;
+    ctx.font = '600 13px ' + cv('--font-display');
+    ctx.fillStyle = cv('--fg');
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const pad = 4;
+    const tw = ctx.measureText(e.weight).width;
+    ctx.fillStyle = cv('--bg');
+    ctx.beginPath();
+    ctx.roundRect(mx - tw / 2 - pad, my - 9 - pad / 2, tw + pad * 2, 18 + pad, 4);
+    ctx.fill();
+    ctx.fillStyle = cv('--fg');
+    ctx.fillText(e.weight, mx, my);
+  }
+
+  for (const n of nodes) {
+    const r = 25;
+    const col = nodeColor(n.id);
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.lineWidth = selected.includes(n.id) ? 3 : 1.5;
+    ctx.strokeStyle = selected.includes(n.id) ? cv('--accent') : 'rgba(0,0,0,0.2)';
+    ctx.stroke();
+
+    ctx.font = '700 16px ' + cv('--font-display');
+    ctx.fillStyle = cv('--node-label');
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(n.id, n.x, n.y);
+  }
+}
+
+resize();
+updateUI();
+</script>
+
+</body>
+</html>
